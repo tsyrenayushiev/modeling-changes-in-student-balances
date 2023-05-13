@@ -1,0 +1,94 @@
+--Запрос, который выводит id каждого студента и дату его первой успешной транзакции
+with first_payments as 
+(   select user_id,
+           min(date(transaction_datetime)) as first_payment_date
+    from skyeng_db.payments
+    where status_name = 'success'
+    group by user_id
+    order by user_id
+),
+-------------------------------------------------------------------------
+--Таблица, в которой хранятся все дни 2016 года
+all_dates as
+(   select distinct date(class_start_datetime) as dt
+    from skyeng_db.classes
+    where date_trunc('YEAR', class_start_datetime) = '2016-01-01'
+    order by dt
+),
+-------------------------------------------------------------------------
+--Все даты жизни студента после того, как произошла его первая транзакция
+all_dates_by_user as
+(  select f.user_id, d.dt
+   from all_dates as d 
+   join first_payments as f 
+       on d.dt >= f.first_payment_date
+),
+-------------------------------------------------------------------------
+--Список успешных транзакций для каждого студента
+payments_by_dates as 
+(   select user_id,
+           date_trunc('day', transaction_datetime) as payment_date,
+           sum(classes) as transaction_balance_change 
+    from skyeng_db.payments
+    where status_name = 'success'
+    group by user_id, payment_date
+    order by user_id
+),
+-------------------------------------------------------------------------
+--Изменение баланса после прохождения уроков
+classes_by_dates as 
+(  select user_id,
+          class_start_datetime::date as class_date,
+          count(id_class)*(-1) as classes
+   from skyeng_db.classes 
+   where class_status in ('success', 'failed_by_student') and class_type != 'trial'
+   group by user_id, class_date
+),
+--------------------------------------------------------------------------
+--Баланс студентов, который сформирован только транзакциями
+payments_by_dates_cumsum as 
+(  select all_dates_by_user.user_id,
+          dt,
+          transaction_balance_change,
+          sum(coalesce(transaction_balance_change, 0)) over (partition by all_dates_by_user.user_id order by dt rows between unbounded preceding and current row) as transaction_balance_change_cs
+   from all_dates_by_user 
+      left join payments_by_dates 
+         on all_dates_by_user.user_id = payments_by_dates.user_id
+         and all_dates_by_user.dt = payments_by_dates.payment_date
+),
+-------------------------------------------------------------------------
+--Таблица, в которой хранится кумулятивная сумма количества пройденных уроков
+classes_by_dates_cumsum as
+(  select all_dates_by_user.user_id,
+          dt,
+          classes,
+          sum(coalesce(classes, 0)) over (partition by all_dates_by_user.user_id order by dt rows between unbounded preceding and current row) as classes_cs
+   from all_dates_by_user 
+      left join classes_by_dates
+         on all_dates_by_user.user_id = classes_by_dates.user_id
+         and all_dates_by_user.dt = classes_by_dates.class_date
+),
+-------------------------------------------------------------------------
+balances as 
+(  select payments_by_dates_cumsum.user_id,
+          payments_by_dates_cumsum.dt,
+          transaction_balance_change,
+          transaction_balance_change_cs,
+          classes,
+          classes_cs,
+          classes_cs + transaction_balance_change_cs as balance
+   from payments_by_dates_cumsum 
+      left join classes_by_dates_cumsum 
+        on payments_by_dates_cumsum.user_id = classes_by_dates_cumsum.user_id
+        and payments_by_dates_cumsum.dt = classes_by_dates_cumsum.dt
+)
+---------------------------------------------------------------------------
+select dt,
+      sum(coalesce(transaction_balance_change, 0)) as sum_transaction_balance_change,
+      sum(transaction_balance_change_cs) as sum_transaction_balance_change_cs,
+      sum(coalesce(classes, 0)) as sum_classes,
+      sum(classes_cs) as sum_classes_cs,
+      sum(balance) as sum_balance
+from balances
+group by dt
+order by dt
