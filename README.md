@@ -13,7 +13,7 @@
  таблица с вычисленными балансами каждого студента(объединил два прошлых запроса с подсчетом суммы). В итоге получил таблицу, где отслеживается баланс каждого студента за каждый день. Также еще построил визуализацию.<p>
 
 <p> Код sql запроса находиться в файле 'sql-запрос' <p>
-<p> > <a href="https://docs.google.com/spreadsheets/d/1LI1d9NejRsG6MH2mO76sru2Kv50czIi5/edit?usp=sharing&ouid=103132688936172986249&rtpof=true&sd=true">Excel таблица с данными по балансу учеников</a> <p>
+<p> > <a href="https://docs.google.com/spreadsheets/d/1LI1d9NejRsG6MH2mO76sru2Kv50czIi5/edit?usp=sharing&ouid=103132688936172986249&rtpof=true&sd=true">Excel таблица с данными и визуализацией по балансу учеников</a> <p>
  
  <p>Выводы:<p>
 <ol>
